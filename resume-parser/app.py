@@ -393,69 +393,49 @@ def extract_docx_text(file):
         return raw_content.decode('utf-8', errors='ignore')
 
 def parse_resume_content(content):
-    """Enhanced parsing function with better regex and logic"""
+    """ORIGINAL parsing function with ONLY Indian phone formats added"""
     
-    # Clean content more thoroughly
+    # Clean content - ORIGINAL LOGIC
     content = content.replace('\r\n', '\n').replace('\r', '\n')
-    # Remove extra whitespace and clean up
-    content = ' '.join(content.split())
     lines = [line.strip() for line in content.split('\n') if line.strip()]
     content_lower = content.lower()
     
-    # Enhanced email extraction with more patterns
+    # Extract email - ORIGINAL LOGIC
     email_patterns = [
-        r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b',
-        r'\b[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}\b',
-        r'[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}',
-        r'Email\s*:?\s*([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})',
-        r'E-mail\s*:?\s*([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})'
+        r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b',
+        r'\b[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}\b'
     ]
     
     email = 'Not found'
     for pattern in email_patterns:
-        email_match = re.search(pattern, content, re.IGNORECASE)
+        email_match = re.search(pattern, content)
         if email_match:
-            # Get the email from group 1 if it exists, otherwise group 0
-            email = email_match.group(1) if email_match.groups() else email_match.group(0)
+            email = email_match.group(0)
             break
     
-    # Enhanced phone extraction with Indian formats
+    # Extract phone - ORIGINAL LOGIC + Indian formats
     phone_patterns = [
-        # Indian formats
-        r'\+91[-.\s]?\d{10}',  # +91-9876543210 or +91 9876543210
+        # Indian formats - ONLY ADDITION
+        r'\+91[-.\s]?\d{10}',  # +91-9876543210
         r'\+91[-.\s]?\d{5}[-.\s]?\d{5}',  # +91-98765-43210
         r'91[-.\s]?\d{10}',  # 91-9876543210
-        r'\b[6-9]\d{9}\b',  # 9876543210 (Indian mobile starts with 6,7,8,9)
+        r'\b[6-9]\d{9}\b',  # 9876543210 (Indian mobile)
         r'\b[6-9]\d{4}[-.\s]?\d{5}\b',  # 98765-43210
-        r'\([+]?91\)[-.\s]?\d{10}',  # (+91) 9876543210
-        # International formats
-        r'\b\d{3}[-.\s]?\d{3}[-.\s]?\d{4}\b',  # US format
-        r'\(\d{3}\)\s?\d{3}[-.\s]?\d{4}',  # (123) 456-7890
+        # Original patterns
+        r'\b\d{3}[-.\s]?\d{3}[-.\s]?\d{4}\b',
+        r'\(\d{3}\)\s?\d{3}[-.\s]?\d{4}',
         r'\+\d{1,3}[-.\s]?\d{3}[-.\s]?\d{3}[-.\s]?\d{4}',
-        r'\b\d{10}\b',
-        # Labeled patterns
-        r'Phone\s*:?\s*([+\d\s\-\(\)\.]{10,})',
-        r'Mobile\s*:?\s*([+\d\s\-\(\)\.]{10,})',
-        r'Tel\s*:?\s*([+\d\s\-\(\)\.]{10,})',
-        r'Contact\s*:?\s*([+\d\s\-\(\)\.]{10,})',
-        # Flexible patterns
-        r'\+?\d{1,3}?[-.\s]?\d{3}[-.\s]?\d{3}[-.\s]?\d{4}',
-        r'\d{3}\s\d{3}\s\d{4}'
+        r'\b\d{10}\b'
     ]
     
     phone = 'Not found'
     for pattern in phone_patterns:
-        phone_match = re.search(pattern, content, re.IGNORECASE)
+        phone_match = re.search(pattern, content)
         if phone_match:
-            # Get the phone from group 1 if it exists, otherwise group 0
-            phone_raw = phone_match.group(1) if phone_match.groups() else phone_match.group(0)
-            # Clean phone number (remove labels like "Phone:")
-            phone_clean = re.sub(r'[^\d\+\-\(\)\.\s]', '', phone_raw)
-            if len(re.sub(r'\D', '', phone_clean)) >= 10:  # At least 10 digits
-                phone = phone_clean.strip()
-                break
+            phone = phone_match.group(0)
+            break
     
-    # Extract skills with better matching
+    # Extract skills - ORIGINAL LOGIC (with VLSI & Embedded)
     skill_keywords = [
         'python', 'javascript', 'java', 'react', 'node', 'nodejs', 'sql', 'html', 'css',
         'angular', 'vue', 'django', 'flask', 'spring', 'mongodb', 'postgresql', 'mysql',
@@ -482,22 +462,14 @@ def parse_resume_content(content):
     ]
     
     skills = []
-    # Use word boundaries for better matching
     for skill in skill_keywords:
-        skill_lower = skill.lower()
-        # For single words, use word boundaries
-        if ' ' not in skill_lower:
-            if re.search(r'\b' + re.escape(skill_lower) + r'\b', content_lower):
-                skills.append(skill.title())
-        else:
-            # For phrases, simple contains check
-            if skill_lower in content_lower:
-                skills.append(skill.title())
+        if skill.lower() in content_lower:
+            skills.append(skill.title())
     
-    # Remove duplicates and sort
+    # Remove duplicates and sort - ORIGINAL LOGIC
     skills = sorted(list(set(skills)))
     
-    # Extract name with enhanced logic
+    # Extract name - ORIGINAL LOGIC
     name = extract_name_from_content(lines, content)
     
     return {
