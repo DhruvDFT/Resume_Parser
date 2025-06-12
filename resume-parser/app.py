@@ -393,42 +393,69 @@ def extract_docx_text(file):
         return raw_content.decode('utf-8', errors='ignore')
 
 def parse_resume_content(content):
-    """ORIGINAL parsing function - NO CHANGES"""
+    """Enhanced parsing function with better regex and logic"""
     
-    # Clean content
+    # Clean content more thoroughly
     content = content.replace('\r\n', '\n').replace('\r', '\n')
+    # Remove extra whitespace and clean up
+    content = ' '.join(content.split())
     lines = [line.strip() for line in content.split('\n') if line.strip()]
     content_lower = content.lower()
     
-    # Extract email with improved regex
+    # Enhanced email extraction with more patterns
     email_patterns = [
-        r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b',
-        r'\b[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}\b'
+        r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b',
+        r'\b[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}\b',
+        r'[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}',
+        r'Email\s*:?\s*([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})',
+        r'E-mail\s*:?\s*([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})'
     ]
     
     email = 'Not found'
     for pattern in email_patterns:
-        email_match = re.search(pattern, content)
+        email_match = re.search(pattern, content, re.IGNORECASE)
         if email_match:
-            email = email_match.group(0)
+            # Get the email from group 1 if it exists, otherwise group 0
+            email = email_match.group(1) if email_match.groups() else email_match.group(0)
             break
     
-    # Extract phone with multiple formats
+    # Enhanced phone extraction with Indian formats
     phone_patterns = [
-        r'\b\d{3}[-.\s]?\d{3}[-.\s]?\d{4}\b',
-        r'\(\d{3}\)\s?\d{3}[-.\s]?\d{4}',
+        # Indian formats
+        r'\+91[-.\s]?\d{10}',  # +91-9876543210 or +91 9876543210
+        r'\+91[-.\s]?\d{5}[-.\s]?\d{5}',  # +91-98765-43210
+        r'91[-.\s]?\d{10}',  # 91-9876543210
+        r'\b[6-9]\d{9}\b',  # 9876543210 (Indian mobile starts with 6,7,8,9)
+        r'\b[6-9]\d{4}[-.\s]?\d{5}\b',  # 98765-43210
+        r'\([+]?91\)[-.\s]?\d{10}',  # (+91) 9876543210
+        # International formats
+        r'\b\d{3}[-.\s]?\d{3}[-.\s]?\d{4}\b',  # US format
+        r'\(\d{3}\)\s?\d{3}[-.\s]?\d{4}',  # (123) 456-7890
         r'\+\d{1,3}[-.\s]?\d{3}[-.\s]?\d{3}[-.\s]?\d{4}',
-        r'\b\d{10}\b'
+        r'\b\d{10}\b',
+        # Labeled patterns
+        r'Phone\s*:?\s*([+\d\s\-\(\)\.]{10,})',
+        r'Mobile\s*:?\s*([+\d\s\-\(\)\.]{10,})',
+        r'Tel\s*:?\s*([+\d\s\-\(\)\.]{10,})',
+        r'Contact\s*:?\s*([+\d\s\-\(\)\.]{10,})',
+        # Flexible patterns
+        r'\+?\d{1,3}?[-.\s]?\d{3}[-.\s]?\d{3}[-.\s]?\d{4}',
+        r'\d{3}\s\d{3}\s\d{4}'
     ]
     
     phone = 'Not found'
     for pattern in phone_patterns:
-        phone_match = re.search(pattern, content)
+        phone_match = re.search(pattern, content, re.IGNORECASE)
         if phone_match:
-            phone = phone_match.group(0)
-            break
+            # Get the phone from group 1 if it exists, otherwise group 0
+            phone_raw = phone_match.group(1) if phone_match.groups() else phone_match.group(0)
+            # Clean phone number (remove labels like "Phone:")
+            phone_clean = re.sub(r'[^\d\+\-\(\)\.\s]', '', phone_raw)
+            if len(re.sub(r'\D', '', phone_clean)) >= 10:  # At least 10 digits
+                phone = phone_clean.strip()
+                break
     
-    # Extract skills - ORIGINAL LOGIC + VLSI & Embedded
+    # Extract skills with better matching
     skill_keywords = [
         'python', 'javascript', 'java', 'react', 'node', 'nodejs', 'sql', 'html', 'css',
         'angular', 'vue', 'django', 'flask', 'spring', 'mongodb', 'postgresql', 'mysql',
@@ -455,14 +482,22 @@ def parse_resume_content(content):
     ]
     
     skills = []
+    # Use word boundaries for better matching
     for skill in skill_keywords:
-        if skill.lower() in content_lower:
-            skills.append(skill.title())
+        skill_lower = skill.lower()
+        # For single words, use word boundaries
+        if ' ' not in skill_lower:
+            if re.search(r'\b' + re.escape(skill_lower) + r'\b', content_lower):
+                skills.append(skill.title())
+        else:
+            # For phrases, simple contains check
+            if skill_lower in content_lower:
+                skills.append(skill.title())
     
     # Remove duplicates and sort
     skills = sorted(list(set(skills)))
     
-    # Extract name - ORIGINAL LOGIC
+    # Extract name with enhanced logic
     name = extract_name_from_content(lines, content)
     
     return {
@@ -473,41 +508,171 @@ def parse_resume_content(content):
     }
 
 def extract_name_from_content(lines, content):
-    """ORIGINAL name extraction - NO CHANGES"""
+    """Enhanced name extraction with better patterns"""
     
     # Skip common header words
     skip_words = {
         'resume', 'cv', 'curriculum', 'vitae', 'profile', 'summary', 'objective',
-        'experience', 'education', 'skills', 'contact', 'information'
+        'experience', 'education', 'skills', 'contact', 'information', 'personal',
+        'details', 'phone', 'email', 'mobile', 'address', 'linkedin', 'github'
     }
     
-    for line in lines[:10]:  # Check first 10 lines
+    # First try to find name patterns in the content
+    name_patterns = [
+        # Look for "Name:" or "Full Name:" labels
+        r'(?:Name|Full Name)\s*:?\s*([A-Z][a-z]+(?:\s+[A-Z][a-z]*\.?)*\s+[A-Z][a-z]+)',
+        # Standard name patterns at line start
+        r'^([A-Z][a-z]{1,15}(?:\s+[A-Z][a-z]*\.?)*\s+[A-Z][a-z]{1,15})
+
+@app.errorhandler(413)
+def too_large(e):
+    logger.warning("File too large uploaded")
+    return jsonify({'error': 'File too large. Maximum size is 16MB.'}), 413
+
+@app.errorhandler(500)
+def internal_error(e):
+    logger.error(f"Internal server error: {str(e)}")
+    return jsonify({'error': 'Internal server error'}), 500
+
+if __name__ == '__main__':
+    port = int(os.environ.get('PORT', 5000))
+    debug = os.environ.get('FLASK_ENV') == 'development'
+    
+    logger.info(f"Starting Flask app on port {port}")
+    app.run(host='0.0.0.0', port=port, debug=debug),
+        # Name with middle initial
+        r'^([A-Z][a-z]{1,15}\s+[A-Z]\.\s+[A-Z][a-z]{1,15})
+
+@app.errorhandler(413)
+def too_large(e):
+    logger.warning("File too large uploaded")
+    return jsonify({'error': 'File too large. Maximum size is 16MB.'}), 413
+
+@app.errorhandler(500)
+def internal_error(e):
+    logger.error(f"Internal server error: {str(e)}")
+    return jsonify({'error': 'Internal server error'}), 500
+
+if __name__ == '__main__':
+    port = int(os.environ.get('PORT', 5000))
+    debug = os.environ.get('FLASK_ENV') == 'development'
+    
+    logger.info(f"Starting Flask app on port {port}")
+    app.run(host='0.0.0.0', port=port, debug=debug),
+        # Three part names
+        r'^([A-Z][a-z]{1,15}\s+[A-Z][a-z]{1,15}\s+[A-Z][a-z]{1,15})
+
+@app.errorhandler(413)
+def too_large(e):
+    logger.warning("File too large uploaded")
+    return jsonify({'error': 'File too large. Maximum size is 16MB.'}), 413
+
+@app.errorhandler(500)
+def internal_error(e):
+    logger.error(f"Internal server error: {str(e)}")
+    return jsonify({'error': 'Internal server error'}), 500
+
+if __name__ == '__main__':
+    port = int(os.environ.get('PORT', 5000))
+    debug = os.environ.get('FLASK_ENV') == 'development'
+    
+    logger.info(f"Starting Flask app on port {port}")
+    app.run(host='0.0.0.0', port=port, debug=debug)
+    ]
+    
+    # Search in the full content first for labeled names
+    for pattern in name_patterns[:1]:  # Only the labeled pattern
+        match = re.search(pattern, content, re.IGNORECASE | re.MULTILINE)
+        if match:
+            potential_name = match.group(1).strip()
+            if validate_name(potential_name):
+                return potential_name
+    
+    # Then search line by line for names at the beginning
+    for i, line in enumerate(lines[:20]):  # Check first 20 lines
         line_clean = line.strip()
         
-        # Skip short lines or lines with common resume headers
-        if len(line_clean) < 3 or len(line_clean) > 60:
+        # Skip very short or very long lines
+        if len(line_clean) < 3 or len(line_clean) > 80:
             continue
             
+        # Skip lines with common resume headers
         if any(word in line_clean.lower() for word in skip_words):
             continue
             
-        # Skip lines with @ or numbers (likely contact info)
-        if '@' in line_clean or re.search(r'\d{3,}', line_clean):
+        # Skip lines with @ or many numbers or special chars
+        if '@' in line_clean or re.search(r'\d{3,}', line_clean) or line_clean.count('.') > 2:
             continue
         
-        # Look for name patterns
-        name_patterns = [
-            r'^([A-Z][a-z]+(?:\s+[A-Z][a-z]*\.?)*\s+[A-Z][a-z]+)$',  # First Last or First M. Last
-            r'^([A-Z][a-z]+\s+[A-Z]\.\s+[A-Z][a-z]+)$',  # First M. Last
-            r'^([A-Z][a-z]+\s+[A-Z][a-z]+(?:\s+[A-Z][a-z]+)?)$'  # First Last or First Middle Last
-        ]
-        
-        for pattern in name_patterns:
+        # Skip lines that are mostly uppercase (likely headers)
+        if line_clean.isupper() and len(line_clean) > 8:
+            continue
+            
+        # Try name patterns on this line
+        for pattern in name_patterns[1:]:  # Skip the labeled pattern
             match = re.match(pattern, line_clean)
             if match:
-                return match.group(1)
+                potential_name = match.group(1).strip()
+                if validate_name(potential_name):
+                    return potential_name
+    
+    # Last resort: look for any two capitalized words together
+    capitalized_words = re.findall(r'\b[A-Z][a-z]{2,15}\b', content)
+    if len(capitalized_words) >= 2:
+        for i in range(len(capitalized_words) - 1):
+            potential_name = f"{capitalized_words[i]} {capitalized_words[i+1]}"
+            if validate_name(potential_name):
+                # Check it's not a common phrase
+                name_lower = potential_name.lower()
+                if not any(skip in name_lower for skip in skip_words):
+                    return potential_name
     
     return 'Not found'
+
+def validate_name(name):
+    """Enhanced name validation"""
+    if not name or len(name.split()) < 2:
+        return False
+        
+    parts = name.split()
+    
+    # Should have 2-4 parts
+    if len(parts) < 2 or len(parts) > 4:
+        return False
+    
+    # Check each part
+    for part in parts:
+        # Should be reasonable length
+        if len(part) < 2 or len(part) > 20:
+            return False
+        # Should start with capital
+        if not part[0].isupper():
+            return False
+        # Should be mostly letters (allow . for middle initials)
+        if not re.match(r'^[A-Za-z\.\']+
+
+@app.errorhandler(413)
+def too_large(e):
+    logger.warning("File too large uploaded")
+    return jsonify({'error': 'File too large. Maximum size is 16MB.'}), 413
+
+@app.errorhandler(500)
+def internal_error(e):
+    logger.error(f"Internal server error: {str(e)}")
+    return jsonify({'error': 'Internal server error'}), 500
+
+if __name__ == '__main__':
+    port = int(os.environ.get('PORT', 5000))
+    debug = os.environ.get('FLASK_ENV') == 'development'
+    
+    logger.info(f"Starting Flask app on port {port}")
+    app.run(host='0.0.0.0', port=port, debug=debug), part):
+            return False
+        # Avoid common non-name words
+        if part.lower() in ['resume', 'email', 'phone', 'contact', 'address', 'skills']:
+            return False
+    
+    return True
 
 @app.errorhandler(413)
 def too_large(e):
