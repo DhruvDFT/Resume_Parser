@@ -8,9 +8,11 @@ import io
 try:
     import zipfile
     import xml.etree.ElementTree as ET
+    import PyPDF2
 except ImportError:
     zipfile = None
     ET = None
+    PyPDF2 = None
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -284,6 +286,8 @@ def parse_resumes():
                 try:
                     if file_ext == 'docx':
                         content = extract_docx_text(file)
+                    elif file_ext == 'pdf':
+                        content = extract_pdf_text(file)
                     else:
                         # Handle text files - KEEP ORIGINAL LOGIC
                         try:
@@ -328,6 +332,35 @@ def parse_resumes():
     except Exception as e:
         logger.error(f"Parse endpoint error: {str(e)}")
         return jsonify({'error': f'Server error: {str(e)}'}), 500
+
+def extract_pdf_text(file):
+    """Extract text from PDF file"""
+    try:
+        if not PyPDF2:
+            # Fallback to binary reading if PyPDF2 not available
+            file.seek(0)
+            raw_content = file.read()
+            return raw_content.decode('utf-8', errors='ignore')
+            
+        file.seek(0)
+        
+        # Use PyPDF2 to extract text
+        pdf_reader = PyPDF2.PdfReader(file)
+        text_content = []
+        
+        for page in pdf_reader.pages:
+            page_text = page.extract_text()
+            if page_text:
+                text_content.append(page_text)
+        
+        return '\n'.join(text_content)
+                
+    except Exception as e:
+        logger.warning(f"PDF extraction failed: {str(e)}")
+        # Fallback to treating as binary
+        file.seek(0)
+        raw_content = file.read()
+        return raw_content.decode('utf-8', errors='ignore')
 
 def extract_docx_text(file):
     """Extract text from DOCX file - MINIMAL ADDITION ONLY"""
@@ -395,7 +428,7 @@ def parse_resume_content(content):
             phone = phone_match.group(0)
             break
     
-    # Extract skills - ORIGINAL LOGIC
+    # Extract skills - ORIGINAL LOGIC + VLSI & Embedded
     skill_keywords = [
         'python', 'javascript', 'java', 'react', 'node', 'nodejs', 'sql', 'html', 'css',
         'angular', 'vue', 'django', 'flask', 'spring', 'mongodb', 'postgresql', 'mysql',
@@ -404,7 +437,21 @@ def parse_resume_content(content):
         'bootstrap', 'tailwind', 'sass', 'less', 'webpack', 'babel', 'npm', 'yarn',
         'redux', 'graphql', 'rest', 'api', 'microservices', 'devops', 'ci/cd',
         'machine learning', 'ai', 'data science', 'pandas', 'numpy', 'tensorflow',
-        'pytorch', 'scikit-learn', 'jupyter', 'tableau', 'power bi', 'excel'
+        'pytorch', 'scikit-learn', 'jupyter', 'tableau', 'power bi', 'excel',
+        # VLSI & Hardware Design
+        'vlsi', 'verilog', 'vhdl', 'systemverilog', 'fpga', 'asic', 'rtl', 'synthesis',
+        'place and route', 'dft', 'sta', 'timing analysis', 'power analysis', 'spice',
+        'cadence', 'synopsys', 'mentor graphics', 'xilinx', 'altera', 'intel fpga',
+        'vivado', 'quartus', 'modelsim', 'questasim', 'ncverilog', 'vcs',
+        'design compiler', 'primetime', 'icc', 'encounter', 'innovus',
+        # Embedded Systems
+        'embedded', 'microcontroller', 'microprocessor', 'arm', 'cortex', 'risc-v',
+        'arduino', 'raspberry pi', 'stm32', 'pic', 'avr', 'esp32', 'esp8266',
+        'rtos', 'freertos', 'embedded c', 'embedded linux', 'bootloader',
+        'i2c', 'spi', 'uart', 'can', 'usb', 'ethernet', 'wifi', 'bluetooth',
+        'pwm', 'adc', 'dac', 'gpio', 'interrupt', 'dma', 'timer',
+        'iot', 'sensor', 'actuator', 'pcb', 'schematic', 'altium', 'kicad',
+        'eagle', 'proteus', 'multisim', 'ltspice', 'pspice'
     ]
     
     skills = []
