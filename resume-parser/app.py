@@ -4,6 +4,14 @@ import os
 import logging
 import io
 
+# Import for document processing
+try:
+    import zipfile
+    import xml.etree.ElementTree as ET
+except ImportError:
+    zipfile = None
+    ET = None
+
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -12,14 +20,6 @@ app = Flask(__name__)
 
 # Configuration
 app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16MB max file size
-
-# Import for document processing
-try:
-    import zipfile
-    import xml.etree.ElementTree as ET
-except ImportError:
-    zipfile = None
-    ET = None
 
 @app.route('/')
 def home():
@@ -285,7 +285,7 @@ def parse_resumes():
                     if file_ext == 'docx':
                         content = extract_docx_text(file)
                     else:
-                        # Handle text files and other formats
+                        # Handle text files - KEEP ORIGINAL LOGIC
                         try:
                             content = file.read().decode('utf-8')
                         except UnicodeDecodeError:
@@ -303,7 +303,7 @@ def parse_resumes():
                 if not content.strip():
                     raise ValueError("File appears to be empty or unreadable")
                 
-                # Enhanced parsing with better regex patterns
+                # KEEP ORIGINAL PARSING LOGIC
                 parsed_data = parse_resume_content(content)
                 
                 results.append({
@@ -330,10 +330,13 @@ def parse_resumes():
         return jsonify({'error': f'Server error: {str(e)}'}), 500
 
 def extract_docx_text(file):
-    """Extract text from DOCX file"""
+    """Extract text from DOCX file - MINIMAL ADDITION ONLY"""
     try:
         if not zipfile:
-            raise ImportError("zipfile module not available")
+            # Fallback to binary reading if zipfile not available
+            file.seek(0)
+            raw_content = file.read()
+            return raw_content.decode('utf-8', errors='ignore')
             
         file.seek(0)
         file_content = file.read()
@@ -343,46 +346,21 @@ def extract_docx_text(file):
             # Extract the main document XML
             xml_content = zip_file.read('word/document.xml')
             
-            # Parse XML and extract text
-            if ET:
-                root = ET.fromstring(xml_content)
-                
-                # Find all text elements (w:t tags)
-                text_elements = []
-                for elem in root.iter():
-                    if elem.tag.endswith('}t'):  # namespace-agnostic match for w:t
-                        if elem.text:
-                            text_elements.append(elem.text)
-                
-                return ' '.join(text_elements)
-            else:
-                # Fallback: simple regex extraction if ET not available
-                import re
-                text_pattern = r'<w:t[^>]*>(.*?)</w:t>'
-                matches = re.findall(text_pattern, xml_content.decode('utf-8'), re.DOTALL)
-                return ' '.join(matches)
+            # Simple regex extraction - avoid complex XML parsing
+            import re
+            text_pattern = r'<w:t[^>]*>(.*?)</w:t>'
+            matches = re.findall(text_pattern, xml_content.decode('utf-8'), re.DOTALL)
+            return ' '.join(matches)
                 
     except Exception as e:
         logger.warning(f"DOCX extraction failed: {str(e)}")
-        # Fallback to treating as binary and extracting what we can
+        # Fallback to treating as binary
         file.seek(0)
         raw_content = file.read()
-        try:
-            # Try to find readable text in the binary data
-            text_parts = []
-            for chunk in raw_content.split(b'\x00'):
-                try:
-                    decoded = chunk.decode('utf-8', errors='ignore').strip()
-                    if len(decoded) > 3 and decoded.isprintable():
-                        text_parts.append(decoded)
-                except:
-                    continue
-            return ' '.join(text_parts)
-        except:
-            return raw_content.decode('utf-8', errors='ignore')
+        return raw_content.decode('utf-8', errors='ignore')
 
 def parse_resume_content(content):
-    """Enhanced resume parsing function"""
+    """ORIGINAL parsing function - NO CHANGES"""
     
     # Clean content
     content = content.replace('\r\n', '\n').replace('\r', '\n')
@@ -417,81 +395,27 @@ def parse_resume_content(content):
             phone = phone_match.group(0)
             break
     
-    # Extract skills with expanded keyword list and better matching
+    # Extract skills - ORIGINAL LOGIC
     skill_keywords = [
-        # Programming Languages
         'python', 'javascript', 'java', 'react', 'node', 'nodejs', 'sql', 'html', 'css',
         'angular', 'vue', 'django', 'flask', 'spring', 'mongodb', 'postgresql', 'mysql',
+        'aws', 'azure', 'docker', 'kubernetes', 'git', 'linux', 'windows', 'macos',
         'php', 'ruby', 'go', 'rust', 'c++', 'c#', 'swift', 'kotlin', 'typescript',
-        'scala', 'perl', 'bash', 'powershell', 'r', 'matlab', 'vba',
-        
-        # Frameworks & Libraries
         'bootstrap', 'tailwind', 'sass', 'less', 'webpack', 'babel', 'npm', 'yarn',
-        'redux', 'graphql', 'rest', 'api', 'microservices', 'express', 'fastapi',
-        'laravel', 'codeigniter', 'symfony', 'rails', 'sinatra',
-        
-        # Cloud & DevOps
-        'aws', 'azure', 'gcp', 'google cloud', 'docker', 'kubernetes', 'jenkins',
-        'git', 'github', 'gitlab', 'bitbucket', 'linux', 'windows', 'macos',
-        'devops', 'ci/cd', 'terraform', 'ansible', 'vagrant', 'nginx', 'apache',
-        
-        # Data & AI
-        'machine learning', 'ai', 'artificial intelligence', 'data science', 'pandas', 
-        'numpy', 'tensorflow', 'pytorch', 'scikit-learn', 'jupyter', 'tableau', 
-        'power bi', 'excel', 'spark', 'hadoop', 'kafka', 'elasticsearch',
-        'deep learning', 'neural networks', 'nlp', 'computer vision',
-        
-        # Databases
-        'oracle', 'sqlite', 'redis', 'cassandra', 'dynamodb', 'neo4j',
-        'mariadb', 'firestore', 'cosmos db',
-        
-        # Testing & Quality
-        'selenium', 'junit', 'pytest', 'jest', 'cypress', 'postman',
-        'unit testing', 'integration testing', 'tdd', 'bdd',
-        
-        # Project Management & Soft Skills
-        'agile', 'scrum', 'kanban', 'jira', 'confluence', 'slack', 'teams',
-        'leadership', 'communication', 'problem solving', 'teamwork'
+        'redux', 'graphql', 'rest', 'api', 'microservices', 'devops', 'ci/cd',
+        'machine learning', 'ai', 'data science', 'pandas', 'numpy', 'tensorflow',
+        'pytorch', 'scikit-learn', 'jupyter', 'tableau', 'power bi', 'excel'
     ]
     
     skills = []
-    content_words = re.findall(r'\b\w+\b', content_lower)
-    content_phrases = content_lower
-    
     for skill in skill_keywords:
-        skill_lower = skill.lower()
-        # Check for exact word matches for single words
-        if ' ' not in skill_lower:
-            if skill_lower in content_words:
-                skills.append(skill.title())
-        else:
-            # Check for phrase matches
-            if skill_lower in content_phrases:
-                skills.append(skill.title())
-    
-    # Also check for common variations and abbreviations
-    skill_variations = {
-        'js': 'JavaScript',
-        'ts': 'TypeScript',
-        'py': 'Python',
-        'ml': 'Machine Learning',
-        'ai': 'Artificial Intelligence',
-        'ui': 'UI Design',
-        'ux': 'UX Design',
-        'api': 'API Development',
-        'db': 'Database',
-        'aws': 'AWS',
-        'gcp': 'Google Cloud Platform'
-    }
-    
-    for abbrev, full_name in skill_variations.items():
-        if abbrev in content_words and full_name not in skills:
-            skills.append(full_name)
+        if skill.lower() in content_lower:
+            skills.append(skill.title())
     
     # Remove duplicates and sort
     skills = sorted(list(set(skills)))
     
-    # Extract name with improved logic
+    # Extract name - ORIGINAL LOGIC
     name = extract_name_from_content(lines, content)
     
     return {
@@ -502,175 +426,41 @@ def parse_resume_content(content):
     }
 
 def extract_name_from_content(lines, content):
-    """Extract name from resume content with improved logic"""
+    """ORIGINAL name extraction - NO CHANGES"""
     
     # Skip common header words
     skip_words = {
         'resume', 'cv', 'curriculum', 'vitae', 'profile', 'summary', 'objective',
-        'experience', 'education', 'skills', 'contact', 'information', 'personal',
-        'details', 'address', 'phone', 'email', 'mobile', 'tel', 'linkedin',
-        'github', 'portfolio', 'website', 'updated', 'last', 'modified'
+        'experience', 'education', 'skills', 'contact', 'information'
     }
     
-    # First, try to find name in the first few lines
-    for i, line in enumerate(lines[:15]):  # Check first 15 lines
+    for line in lines[:10]:  # Check first 10 lines
         line_clean = line.strip()
         
-        # Skip very short or very long lines
-        if len(line_clean) < 2 or len(line_clean) > 80:
+        # Skip short lines or lines with common resume headers
+        if len(line_clean) < 3 or len(line_clean) > 60:
             continue
             
-        # Skip lines with common resume headers
         if any(word in line_clean.lower() for word in skip_words):
             continue
             
-        # Skip lines with @ or many numbers (likely contact info)
-        if '@' in line_clean or re.search(r'\d{3,}', line_clean) or line_clean.count('.') > 2:
+        # Skip lines with @ or numbers (likely contact info)
+        if '@' in line_clean or re.search(r'\d{3,}', line_clean):
             continue
         
-        # Skip lines that are mostly uppercase (likely headers)
-        if line_clean.isupper() and len(line_clean) > 10:
-            continue
-            
-        # Look for name patterns with more flexibility
+        # Look for name patterns
         name_patterns = [
-            # Standard: First Last
-            r'^([A-Z][a-z]{1,15}(?:\s+[A-Z][a-z]*\.?){0,2}\s+[A-Z][a-z]{1,15})
-
-@app.errorhandler(413)
-def too_large(e):
-    logger.warning("File too large uploaded")
-    return jsonify({'error': 'File too large. Maximum size is 16MB.'}), 413
-
-@app.errorhandler(500)
-def internal_error(e):
-    logger.error(f"Internal server error: {str(e)}")
-    return jsonify({'error': 'Internal server error'}), 500
-
-if __name__ == '__main__':
-    port = int(os.environ.get('PORT', 5000))
-    debug = os.environ.get('FLASK_ENV') == 'development'
-    
-    logger.info(f"Starting Flask app on port {port}")
-    app.run(host='0.0.0.0', port=port, debug=debug),
-            # With middle initial: First M. Last
-            r'^([A-Z][a-z]{1,15}\s+[A-Z]\.\s+[A-Z][a-z]{1,15})
-
-@app.errorhandler(413)
-def too_large(e):
-    logger.warning("File too large uploaded")
-    return jsonify({'error': 'File too large. Maximum size is 16MB.'}), 413
-
-@app.errorhandler(500)
-def internal_error(e):
-    logger.error(f"Internal server error: {str(e)}")
-    return jsonify({'error': 'Internal server error'}), 500
-
-if __name__ == '__main__':
-    port = int(os.environ.get('PORT', 5000))
-    debug = os.environ.get('FLASK_ENV') == 'development'
-    
-    logger.info(f"Starting Flask app on port {port}")
-    app.run(host='0.0.0.0', port=port, debug=debug),
-            # Three names: First Middle Last
-            r'^([A-Z][a-z]{1,15}\s+[A-Z][a-z]{1,15}\s+[A-Z][a-z]{1,15})
-
-@app.errorhandler(413)
-def too_large(e):
-    logger.warning("File too large uploaded")
-    return jsonify({'error': 'File too large. Maximum size is 16MB.'}), 413
-
-@app.errorhandler(500)
-def internal_error(e):
-    logger.error(f"Internal server error: {str(e)}")
-    return jsonify({'error': 'Internal server error'}), 500
-
-if __name__ == '__main__':
-    port = int(os.environ.get('PORT', 5000))
-    debug = os.environ.get('FLASK_ENV') == 'development'
-    
-    logger.info(f"Starting Flask app on port {port}")
-    app.run(host='0.0.0.0', port=port, debug=debug),
-            # With titles: Mr./Ms./Dr. etc
-            r'^(?:Mr\.?|Ms\.?|Mrs\.?|Dr\.?|Prof\.?)\s+([A-Z][a-z]{1,15}(?:\s+[A-Z][a-z]*\.?)*\s+[A-Z][a-z]{1,15})
-
-@app.errorhandler(413)
-def too_large(e):
-    logger.warning("File too large uploaded")
-    return jsonify({'error': 'File too large. Maximum size is 16MB.'}), 413
-
-@app.errorhandler(500)
-def internal_error(e):
-    logger.error(f"Internal server error: {str(e)}")
-    return jsonify({'error': 'Internal server error'}), 500
-
-if __name__ == '__main__':
-    port = int(os.environ.get('PORT', 5000))
-    debug = os.environ.get('FLASK_ENV') == 'development'
-    
-    logger.info(f"Starting Flask app on port {port}")
-    app.run(host='0.0.0.0', port=port, debug=debug),
-            # Simple two word names with some flexibility
-            r'^([A-Z][a-zA-Z]{1,15}\s+[A-Z][a-zA-Z]{1,15})(?:\s|$)',
+            r'^([A-Z][a-z]+(?:\s+[A-Z][a-z]*\.?)*\s+[A-Z][a-z]+)$',  # First Last or First M. Last
+            r'^([A-Z][a-z]+\s+[A-Z]\.\s+[A-Z][a-z]+)$',  # First M. Last
+            r'^([A-Z][a-z]+\s+[A-Z][a-z]+(?:\s+[A-Z][a-z]+)?)$'  # First Last or First Middle Last
         ]
         
         for pattern in name_patterns:
-            match = re.search(pattern, line_clean)
+            match = re.match(pattern, line_clean)
             if match:
-                potential_name = match.group(1) if match.groups() else match.group(0)
-                # Additional validation
-                if validate_name(potential_name):
-                    return potential_name.strip()
-    
-    # If no name found in structured lines, try a broader search
-    # Look for any capitalized words that could be names
-    words = re.findall(r'\b[A-Z][a-z]{2,15}\b', content)
-    if len(words) >= 2:
-        # Look for the first occurrence of two capitalized words together
-        for i in range(len(words) - 1):
-            potential_name = f"{words[i]} {words[i+1]}"
-            if validate_name(potential_name) and potential_name.lower() not in [w.lower() for w in skip_words]:
-                return potential_name
+                return match.group(1)
     
     return 'Not found'
-
-def validate_name(name):
-    """Validate if a string looks like a real name"""
-    if not name or len(name.split()) < 2:
-        return False
-        
-    parts = name.split()
-    
-    # Check each part
-    for part in parts:
-        # Should be reasonable length
-        if len(part) < 2 or len(part) > 20:
-            return False
-        # Should start with capital
-        if not part[0].isupper():
-            return False
-        # Should be mostly letters
-        if not re.match(r'^[A-Za-z\.\']+
-
-@app.errorhandler(413)
-def too_large(e):
-    logger.warning("File too large uploaded")
-    return jsonify({'error': 'File too large. Maximum size is 16MB.'}), 413
-
-@app.errorhandler(500)
-def internal_error(e):
-    logger.error(f"Internal server error: {str(e)}")
-    return jsonify({'error': 'Internal server error'}), 500
-
-if __name__ == '__main__':
-    port = int(os.environ.get('PORT', 5000))
-    debug = os.environ.get('FLASK_ENV') == 'development'
-    
-    logger.info(f"Starting Flask app on port {port}")
-    app.run(host='0.0.0.0', port=port, debug=debug), part):
-            return False
-    
-    return True
 
 @app.errorhandler(413)
 def too_large(e):
